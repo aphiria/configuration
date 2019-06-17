@@ -19,6 +19,7 @@ use Aphiria\Api\IDependencyResolver;
 use Aphiria\Middleware\MiddlewarePipelineFactory;
 use Aphiria\Net\Http\Handlers\IRequestHandler;
 use Closure;
+use InvalidArgumentException;
 use Opulence\Ioc\Bootstrappers\Bootstrapper;
 use Opulence\Ioc\Bootstrappers\IBootstrapperDispatcher;
 use Opulence\Ioc\IContainer;
@@ -32,6 +33,8 @@ final class ApplicationBuilder implements IApplicationBuilder
 {
     /** @var IContainer The DI container to resolve dependencies with */
     private IContainer $container;
+    /** @var IBootstrapperDispatcher The bootstrapper dispatcher */
+    private IBootstrapperDispatcher $bootstrapperDispatcher;
     /** @var Closure[] The mapping of builder names to callbacks */
     private array $components = [];
     /** @var Closure[] The list of bootstrapper callbacks */
@@ -43,10 +46,12 @@ final class ApplicationBuilder implements IApplicationBuilder
 
     /**
      * @param IContainer $container The DI container to resolve dependencies with
+     * @param IBootstrapperDispatcher $bootstrapperDispatcher The bootstrapper dispatcher
      */
-    public function __construct(IContainer $container)
+    public function __construct(IContainer $container, IBootstrapperDispatcher $bootstrapperDispatcher)
     {
         $this->container = $container;
+        $this->bootstrapperDispatcher = $bootstrapperDispatcher;
     }
 
     /**
@@ -55,6 +60,7 @@ final class ApplicationBuilder implements IApplicationBuilder
      * @param string $methodName The name of the method that was called
      * @param array $arguments The arguments that were passed in
      * @return IApplicationBuilder For chaining
+     * @throws InvalidArgumentException Thrown if no component exists with the input name
      */
     public function __call(string $methodName, array $arguments): IApplicationBuilder
     {
@@ -79,12 +85,12 @@ final class ApplicationBuilder implements IApplicationBuilder
                 }
             }
 
-            $this->container->resolve(IBootstrapperDispatcher::class)->dispatch($bootstrappers);
+            $this->bootstrapperDispatcher->dispatch($bootstrappers);
 
             foreach ($this->components as $normalizedComponentName => $componentConfig) {
                 /** @var Closure $factory */
                 $factory = $componentConfig['factory'];
-                $factory($this->container, $componentConfig['callbacks']);
+                $factory($componentConfig['callbacks']);
             }
 
             return $this->createApp();
@@ -121,7 +127,7 @@ final class ApplicationBuilder implements IApplicationBuilder
         $normalizedComponentName = self::normalizeComponentName($componentName);
 
         if (!isset($this->components[$normalizedComponentName])) {
-            throw new \InvalidArgumentException("$componentName does not have a factory registered");
+            throw new InvalidArgumentException("$componentName does not have a factory registered");
         }
 
         $this->components[$normalizedComponentName]['callbacks'][] = $callback;
@@ -172,27 +178,22 @@ final class ApplicationBuilder implements IApplicationBuilder
             throw new RuntimeException('Router callback not set');
         }
 
-        if (!($router = ($this->routerCallback)($this->container)) instanceof IRequestHandler) {
+        if (!($router = ($this->routerCallback)()) instanceof IRequestHandler) {
             throw new RuntimeException('Router must implement ' . IRequestHandler::class);
         }
 
-        if ($this->container->hasBinding(IDependencyResolver::class)) {
-            $dependencyResolver = $this->container->resolve(IDependencyResolver::class);
-        } else {
-            $this->container->bindInstance(
+        $this->container->hasBinding(IDependencyResolver::class)
+            ? $dependencyResolver = $this->container->resolve(IDependencyResolver::class)
+            : $this->container->bindInstance(
                 IDependencyResolver::class,
                 $dependencyResolver = new ContainerDependencyResolver($this->container)
             );
-        }
-
-        if ($this->container->hasBinding(MiddlewarePipelineFactory::class)) {
-            $middlewarePipelineFactory = $this->container->resolve(MiddlewarePipelineFactory::class);
-        } else {
-            $this->container->bindInstance(
+        $this->container->hasBinding(MiddlewarePipelineFactory::class)
+            ? $middlewarePipelineFactory = $this->container->resolve(MiddlewarePipelineFactory::class)
+            : $this->container->bindInstance(
                 MiddlewarePipelineFactory::class,
                 $middlewarePipelineFactory = new MiddlewarePipelineFactory()
             );
-        }
 
         $app = new App($dependencyResolver, $router, $middlewarePipelineFactory);
 

@@ -12,8 +12,6 @@ declare(strict_types=1);
 
 namespace Aphiria\Configuration;
 
-use Aphiria\Api\ContainerDependencyResolver;
-use Aphiria\Api\IDependencyResolver;
 use Aphiria\Api\RouterKernel;
 use Aphiria\Console\Commands\CommandRegistry;
 use Aphiria\Routing\Builders\RouteBuilderRegistry;
@@ -25,6 +23,17 @@ use Opulence\Ioc\IContainer;
  */
 final class AphiriaComponentBuilder
 {
+    /** @var IContainer The DI container to resolve dependencies with */
+    private IContainer $container;
+
+    /**
+     * @param IContainer $container The DI container to resolve dependencies with
+     */
+    public function __construct(IContainer $container)
+    {
+        $this->container = $container;
+    }
+
     /**
      * Registers Aphiria console commands
      *
@@ -33,12 +42,8 @@ final class AphiriaComponentBuilder
      */
     public function withCommandComponent(IApplicationBuilder $appBuilder): self
     {
-        $appBuilder->registerComponentFactory('commands', function (IContainer $container, array $callbacks) {
-            if ($container->hasBinding(CommandRegistry::class)) {
-                $commands = $container->resolve(CommandRegistry::class);
-            } else {
-                $container->bindInstance(CommandRegistry::class, $commands = new CommandRegistry());
-            }
+        $appBuilder->registerComponentFactory('commands', function (array $callbacks) {
+            $commands = new CommandRegistry();
 
             foreach ($callbacks as $callback) {
                 $callback($commands);
@@ -54,26 +59,15 @@ final class AphiriaComponentBuilder
      * @param IApplicationBuilder $appBuilder The app builder to register to
      * @return AphiriaComponentBuilder For chaining
      */
-    public function withRouteComponent(IApplicationBuilder $appBuilder): self
+    public function withRoutingComponent(IApplicationBuilder $appBuilder): self
     {
-        $appBuilder->registerComponentFactory('routes', function (IContainer $container, array $callbacks) use ($appBuilder) {
-            // Set up the router request handler
-            if ($container->hasBinding(IDependencyResolver::class)) {
-                $dependencyResolver = $container->resolve(IDependencyResolver::class);
-            } else {
-                $container->bindInstance(
-                    IDependencyResolver::class,
-                    $dependencyResolver = new ContainerDependencyResolver($container)
-                );
-            }
-
-            $appBuilder->withRouter(fn (IContainer $container) => $container->resolve(RouterKernel::class));
-
-            if ($container->hasBinding(LazyRouteFactory::class)) {
-                $routeFactory = $container->resolve(LazyRouteFactory::class);
-            } else {
-                $container->bindInstance(LazyRouteFactory::class, $routeFactory = new LazyRouteFactory());
-            }
+        // Set up the router request handler
+        $appBuilder->withRouter(fn () => $this->container->resolve(RouterKernel::class));
+        // Register the routing component
+        $appBuilder->registerComponentFactory('routes', function (array $callbacks) {
+            $this->container->hasBinding(LazyRouteFactory::class)
+                ? $routeFactory = $this->container->resolve(LazyRouteFactory::class)
+                : $this->container->bindInstance(LazyRouteFactory::class, $routeFactory = new LazyRouteFactory());
 
             $routeFactory->addFactory(function () use ($callbacks) {
                 $routeBuilders = new RouteBuilderRegistry();

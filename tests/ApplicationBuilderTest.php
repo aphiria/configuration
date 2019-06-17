@@ -38,10 +38,7 @@ class ApplicationBuilderTest extends TestCase
     {
         $this->container = $this->createMock(IContainer::class);
         $this->bootstrapperDispatcher = $this->createMock(IBootstrapperDispatcher::class);
-        $this->container->method('resolve')
-            ->with(IBootstrapperDispatcher::class)
-            ->willReturn($this->bootstrapperDispatcher);
-        $this->appBuilder = new ApplicationBuilder($this->container);
+        $this->appBuilder = new ApplicationBuilder($this->container, $this->bootstrapperDispatcher);
     }
 
     public function testBuildingAppReturnsInstanceOfAppByDefault(): void
@@ -52,7 +49,7 @@ class ApplicationBuilderTest extends TestCase
 
     public function testComponentsAreCallableViaMagicMethods(): void
     {
-        $this->appBuilder->registerComponentFactory('foo', function (IContainer $container, array $callbacks){
+        $this->appBuilder->registerComponentFactory('foo', function (array $callbacks){
             foreach ($callbacks as $callback) {
                 $callback();
             }
@@ -69,7 +66,7 @@ class ApplicationBuilderTest extends TestCase
 
     public function testComponentNamesAreNormalized(): void
     {
-        $this->appBuilder->registerComponentFactory('Foo', function (IContainer $container, array $callbacks){
+        $this->appBuilder->registerComponentFactory('Foo', function (array $callbacks){
             foreach ($callbacks as $callback) {
                 $callback();
             }
@@ -93,7 +90,7 @@ class ApplicationBuilderTest extends TestCase
 
     public function testRegisteringComponentExecutesAllRegisteredCallbacks(): void
     {
-        $this->appBuilder->registerComponentFactory('foo', function (IContainer $container, array $callbacks){
+        $this->appBuilder->registerComponentFactory('foo', function (array $callbacks){
             foreach ($callbacks as $callback) {
                 $callback();
             }
@@ -111,7 +108,7 @@ class ApplicationBuilderTest extends TestCase
     {
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Router must implement ' . IRequestHandler::class);
-        $this->appBuilder->withRouter(fn (IContainer $container) => $this);
+        $this->appBuilder->withRouter(fn () => $this);
         $this->appBuilder->build();
     }
 
@@ -142,7 +139,7 @@ class ApplicationBuilderTest extends TestCase
     public function testWithMethodsReturnsInstanceOfAppBuilder(): void
     {
         // Need to set up a component factory so we can call withComponent
-        $this->appBuilder->registerComponentFactory('foo', fn (IContainer $container, array $callbacks) => null);
+        $this->appBuilder->registerComponentFactory('foo', fn (array $callbacks) => null);
         $bootstrapper = new class() extends Bootstrapper
         {
             public function registerBindings(IContainer $container): void
@@ -154,7 +151,7 @@ class ApplicationBuilderTest extends TestCase
         $this->assertSame($this->appBuilder, $this->appBuilder->withComponent('foo', fn (IContainer $container, array $callbacks) => null));
         $this->assertSame($this->appBuilder, $this->appBuilder->withMiddleware(fn () => []));
         $this->assertSame($this->appBuilder, $this->appBuilder->withModule($this->createMock(IModuleBuilder::class)));
-        $this->assertSame($this->appBuilder, $this->appBuilder->withRouter(fn (IContainer $container) => $this->createMock(IRequestHandler::class)));
+        $this->assertSame($this->appBuilder, $this->appBuilder->withRouter(fn () => $this->createMock(IRequestHandler::class)));
     }
 
     public function testWithModuleBuildsTheModule(): void
@@ -172,6 +169,6 @@ class ApplicationBuilderTest extends TestCase
      */
     private function setRouter(): void
     {
-        $this->appBuilder->withRouter(fn (IContainer $container) => $this->createMock(IRequestHandler::class));
+        $this->appBuilder->withRouter(fn () => $this->createMock(IRequestHandler::class));
     }
 }
