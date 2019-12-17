@@ -32,6 +32,7 @@
         "aphiria/exceptions": "1.0.*@dev",
         "aphiria/route-annotations": "1.0.*@dev",
         "aphiria/validation": "1.0.*@dev",
+        "aphiria/validation-annotations": "1.0.*@dev",
         "php": "^7.4",
         "psr/log": "~1.0"
     },
