@@ -13,15 +13,17 @@ declare(strict_types=1);
 namespace Aphiria\Configuration;
 
 /**
- * Defines the interface for configuration readers to implement
+ * Defines the interface for configuration file readers to implement
  */
-interface IConfigurationReader
+interface IConfigurationFileReader
 {
     /**
      * Reads the configuration from storage
      *
-     * @return Configuration The configuration that was read
+     * @param string $path The path to the file to read
+     * @param string $pathDelimiter The delimiter for nested path segments
+     * @return IConfiguration The configuration that was read
      * @throws ConfigurationException Thrown if the configuration could not be read
      */
-    public function readConfiguration(): Configuration;
+    public function readConfiguration(string $path, string $pathDelimiter = '.'): IConfiguration;
 }
